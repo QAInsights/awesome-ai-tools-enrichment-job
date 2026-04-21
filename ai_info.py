@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 
 from constants import GEMINI_MODEL
 from dotenv import load_dotenv
@@ -30,11 +31,23 @@ def get_tool_info(company_name, tool_name, slug):
     prompt = build_prompt(company_name, tool_name, slug)
     logging.info(prompt)
 
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config=config,
-    )
+    max_retries = 3
+    response = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=config,
+            )
+            break
+        except Exception as e:
+            logging.warning("Attempt %s/%s failed for %s: %s", attempt, max_retries, slug, e)
+            if attempt == max_retries:
+                logging.error("Max retries exceeded for %s", slug)
+                raise
+            time.sleep(2 ** attempt)
+
     logging.info(response.text)
 
     prepare_enriched_data(response.text)
