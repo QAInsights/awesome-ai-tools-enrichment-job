@@ -1,0 +1,49 @@
+import json
+import logging
+
+from constants import GEMINI_MODEL
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
+
+from utils import build_prompt
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+
+load_dotenv()
+client = genai.Client()
+
+grounding_tool = types.Tool(
+    google_search=types.GoogleSearch()
+)
+
+config = types.GenerateContentConfig(
+    tools=[grounding_tool]
+)
+
+enriched_data = []
+
+def get_tool_info(company_name, tool_name, slug):
+    prompt = build_prompt(company_name, tool_name, slug)
+    logging.info(prompt)
+
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=prompt,
+        config=config,
+    )
+    logging.info(response.text)
+
+    prepare_enriched_data(response.text)
+
+def prepare_enriched_data(response_text):
+    data = json.loads(response_text)
+    enriched_data.append(data)
+    logging.info("Enriched %s items", len(enriched_data))
+
+    with open("enriched_data.json", "w", encoding="utf-8") as f:
+        json.dump(enriched_data, f, indent=2, ensure_ascii=False)
+

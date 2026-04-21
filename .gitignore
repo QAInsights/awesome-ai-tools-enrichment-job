@@ -9,3 +9,7 @@ wheels/
 # Virtual environments
 .venv
 .env
+
+# Generated / downloaded data files
+enriched_data.json
+tools.json
