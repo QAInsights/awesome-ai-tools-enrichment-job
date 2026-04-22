@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import time
 
 from constants import GEMINI_MODEL
@@ -22,7 +23,8 @@ grounding_tool = types.Tool(
 )
 
 config = types.GenerateContentConfig(
-    tools=[grounding_tool]
+    tools=[grounding_tool],
+    http_options=types.HttpOptions(timeout=120000)  # 2 minute timeout
 )
 
 enriched_data = []
@@ -50,9 +52,17 @@ def get_tool_info(company_name, tool_name, slug):
 
     logging.info(response.text)
 
-    prepare_enriched_data(response.text)
+    prepare_enriched_data(response.text, slug)
 
-def prepare_enriched_data(response_text):
+def is_valid_tool(tool_name, company_name):
+    """Check if tool name represents a valid tool (not a category/placeholder)."""
+    invalid_names = {
+        "open source", "opensource", "free", "paid", "freemium",
+        "unknown", "n/a", "na", "", "none", "other"
+    }
+    return tool_name.lower().strip() not in invalid_names
+
+def prepare_enriched_data(response_text, slug):
     data = json.loads(response_text)
     enriched_data.append(data)
     logging.info("Enriched %s items", len(enriched_data))
