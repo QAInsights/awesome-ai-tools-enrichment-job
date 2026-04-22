@@ -2,7 +2,7 @@ name: Enrich AI Tools Data
 
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '0 0 * * *'
   workflow_dispatch:
 
 permissions:
@@ -40,13 +40,13 @@ jobs:
       - name: Copy enriched data
         run: |
           mkdir -p target-repo/public/data
-          cp enriched_data.json target-repo/public/data/
+          cp enriched-tools.json target-repo/public/data/
 
       - name: Commit and push
         run: |
           cd target-repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add public/data/enriched_data.json
+          git add public/data/enriched-tools.json
           git diff --cached --quiet || git commit -m "chore: update enriched data $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           git push
