@@ -3,7 +3,7 @@ import logging
 import os
 import time
 
-from constants import GEMINI_MODEL
+from constants import GEMINI_MODEL, GEMINI_MODEL_BACKUP
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -35,20 +35,37 @@ def get_tool_info(company_name, tool_name, slug):
 
     max_retries = 3
     response = None
-    for attempt in range(1, max_retries + 1):
-        try:
-            response = client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=prompt,
-                config=config,
-            )
-            break
-        except Exception as e:
-            logging.warning("Attempt %s/%s failed for %s: %s", attempt, max_retries, slug, e)
-            if attempt == max_retries:
-                logging.error("Max retries exceeded for %s", slug)
-                raise
-            time.sleep(2 ** attempt)
+    
+    # Try primary model, then fallback to backup model
+    for model in [GEMINI_MODEL, GEMINI_MODEL_BACKUP]:
+        for attempt in range(1, max_retries + 1):
+            try:
+                logging.info("Using model: %s (attempt %s/%s)", model, attempt, max_retries)
+                response = client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config=config,
+                )
+                break
+            except Exception as e:
+                error_str = str(e)
+                if "503" in error_str or "UNAVAILABLE" in error_str:
+                    logging.warning("Model %s unavailable (attempt %s/%s): %s", model, attempt, max_retries, e)
+                    if attempt == max_retries:
+                        if model == GEMINI_MODEL:
+                            logging.info("Switching to backup model: %s", GEMINI_MODEL_BACKUP)
+                            break  # Exit inner loop to try backup model
+                        else:
+                            logging.error("Both models failed for %s", slug)
+                            raise
+                    time.sleep(2 ** attempt)
+                else:
+                    logging.warning("Attempt %s/%s failed for %s: %s", attempt, max_retries, slug, e)
+                    if attempt == max_retries:
+                        raise
+                    time.sleep(2 ** attempt)
+        if response:
+            break  # Success, exit outer loop
 
     logging.info(response.text)
 
