@@ -2,11 +2,11 @@ from datetime import datetime
 
 def download_json():
     # TODO: Download the JSON file from the URL
-    url = "https://raw.githubusercontent.com/QAInsights/awesome-ai-tools/refs/heads/main/src/data/tools.json"
+    url = "https://raw.githubusercontent.com/QAInsights/awesome-ai-tools/refs/heads/main/data/slugs.json"
     
     import requests
     response = requests.get(url)
-    with open("tools.json", "w") as f:
+    with open("slugs.json", "w") as f:
         f.write(response.text)
 
 

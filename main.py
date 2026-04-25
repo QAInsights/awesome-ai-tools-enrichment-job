@@ -15,14 +15,14 @@ load_dotenv()
 
 def main():
     download_json()
-    with open("tools.json", "r") as f:
+    with open("slugs.json", "r") as f:
         tools = json.load(f)
         tool_count: int = len(tools)
 
         for idx, tool in enumerate(tools, 1):
-            tool_name: str = tool.get("companyName")
-            company_name: str = tool.get("companyName")
-            slug: str = tool_name.lower().replace(" ", "-")
+            tool_name: str = tool.get("name")
+            company_name: str = tool.get("company")
+            slug: str = tool.get("slug")
             
             logging.info(f"Processing {idx}/{tool_count}: {tool_name}")
             
