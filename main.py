@@ -18,6 +18,7 @@ def main():
     with open("slugs.json", "r") as f:
         tools = json.load(f)
         tool_count: int = len(tools)
+        logging.info(f"Total tools to process: {tool_count}")
 
         for idx, tool in enumerate(tools, 1):
             tool_name: str = tool.get("name")
@@ -33,6 +34,8 @@ def main():
 
             get_tool_info(company_name, tool_name, slug)
             time.sleep(5)
+        
+        logging.info(f"{tool_count} tools processed successfully!")
 
 if __name__ == "__main__":
     main()
