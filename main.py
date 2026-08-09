@@ -75,7 +75,7 @@ def main():
                 provider_name=args.provider,
                 fallback_provider_name=fallback,
             )
-            time.sleep(5)
+            time.sleep(0.3)
 
         logging.info(f"{tool_count} tools processed successfully!")
 
