@@ -1,14 +1,9 @@
 import json
 import logging
-import os
-import time
+from typing import Any, Dict, Optional
 
-from constants import GEMINI_MODEL, GEMINI_MODEL_BACKUP
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
-
-from utils import build_prompt
+from providers import get_provider
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,60 +11,32 @@ logging.basicConfig(
 )
 
 load_dotenv()
-client = genai.Client()
 
-grounding_tool = types.Tool(
-    google_search=types.GoogleSearch()
-)
+enriched_data: list[dict] = []
 
-config = types.GenerateContentConfig(
-    tools=[grounding_tool],
-    http_options=types.HttpOptions(timeout=120000)  # 2 minute timeout
-)
 
-enriched_data = []
+def get_tool_info(
+    company_name: str,
+    tool_name: str,
+    slug: str,
+    provider_name: Optional[str] = None,
+    fallback_provider_name: Optional[str] = None,
+):
+    """Fetch tool profile from the requested provider, falling back on failure."""
+    primary_name = provider_name or "exa"
+    logging.info("Getting info for %s using provider %s", slug, primary_name)
+    primary = get_provider(primary_name)
+    try:
+        data = primary.get_tool_profile(company_name, tool_name, slug)
+    except Exception as e:
+        logging.warning("Primary provider %s failed for %s: %s", primary_name, slug, e)
+        if not fallback_provider_name:
+            raise
+        fallback = get_provider(fallback_provider_name)
+        logging.info("Falling back to %s for %s", fallback_provider_name, slug)
+        data = fallback.get_tool_profile(company_name, tool_name, slug)
+    prepare_enriched_data(data, slug)
 
-def get_tool_info(company_name, tool_name, slug):
-    prompt = build_prompt(company_name, tool_name, slug)
-    logging.info(prompt)
-
-    max_retries = 3
-    response = None
-    
-    # Try primary model, then fallback to backup model
-    for model in [GEMINI_MODEL, GEMINI_MODEL_BACKUP]:
-        for attempt in range(1, max_retries + 1):
-            try:
-                logging.info("Using model: %s (attempt %s/%s)", model, attempt, max_retries)
-                response = client.models.generate_content(
-                    model=model,
-                    contents=prompt,
-                    config=config,
-                )
-                break
-            except Exception as e:
-                error_str = str(e)
-                if "503" in error_str or "UNAVAILABLE" in error_str:
-                    logging.warning("Model %s unavailable (attempt %s/%s): %s", model, attempt, max_retries, e)
-                    if attempt == max_retries:
-                        if model == GEMINI_MODEL:
-                            logging.info("Switching to backup model: %s", GEMINI_MODEL_BACKUP)
-                            break  # Exit inner loop to try backup model
-                        else:
-                            logging.error("Both models failed for %s", slug)
-                            raise
-                    time.sleep(2 ** attempt)
-                else:
-                    logging.warning("Attempt %s/%s failed for %s: %s", attempt, max_retries, slug, e)
-                    if attempt == max_retries:
-                        raise
-                    time.sleep(2 ** attempt)
-        if response:
-            break  # Success, exit outer loop
-
-    logging.info(response.text)
-
-    prepare_enriched_data(response.text, slug)
 
 def is_valid_tool(tool_name, company_name):
     """Check if tool name represents a valid tool (not a category/placeholder)."""
@@ -79,11 +46,9 @@ def is_valid_tool(tool_name, company_name):
     }
     return tool_name.lower().strip() not in invalid_names
 
-def prepare_enriched_data(response_text, slug):
-    data = json.loads(response_text)
+
+def prepare_enriched_data(data: Dict[str, Any], slug: str):
     enriched_data.append(data)
     logging.info("Enriched %s items", len(enriched_data))
-
     with open("enriched_data.json", "w", encoding="utf-8") as f:
         json.dump(enriched_data, f, indent=2, ensure_ascii=False)
-
