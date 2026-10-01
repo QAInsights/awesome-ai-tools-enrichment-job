@@ -7,7 +7,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from ai_info import get_tool_info, is_valid_tool
-from utils import download_json, download_readme, parse_tool_urls
+from utils import download_json, download_previous_profiles, download_readme, parse_tool_urls
 
 logging.basicConfig(
     level=logging.INFO,
@@ -52,6 +52,7 @@ def main():
 
     download_json()
     tool_urls = parse_tool_urls(download_readme())
+    previous_profiles = download_previous_profiles()
     with open("slugs.json", "r") as f:
         tools = json.load(f)
         tool_count: int = len(tools)
@@ -79,6 +80,7 @@ def main():
                 fallback_provider_name=fallback,
                 url=url,
                 category=category,
+                previous=previous_profiles.get(slug),
             )
             time.sleep(0.3)
 

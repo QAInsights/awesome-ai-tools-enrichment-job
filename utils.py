@@ -1,7 +1,8 @@
 import json
 import re
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, List, Optional
+from urllib.parse import urlparse
 
 from constants import REQUIRED_PROFILE_FIELDS, VALID_PRICING
 
@@ -24,6 +25,16 @@ def download_json():
     response = requests.get(url)
     with open("slugs.json", "w") as f:
         f.write(response.text)
+
+
+def download_previous_profiles() -> Dict[str, Dict[str, Any]]:
+    """Profiles currently published by the directory, keyed by slug, kept when a fresh one is rejected."""
+    url = "https://raw.githubusercontent.com/QAInsights/awesome-ai-tools/refs/heads/main/public/data/enriched-tools.json"
+    import requests
+
+    response = requests.get(url, timeout=30)
+    response.raise_for_status()
+    return {p["slug"]: p for p in response.json() if isinstance(p, dict) and p.get("slug")}
 
 
 def download_readme() -> str:
@@ -60,6 +71,82 @@ def identity_rule(url: str = "") -> str:
     )
 
 
+GROUNDING_RULES = """Accuracy rules:
+- State only facts that a source you were given says explicitly. Never fill gaps from memory or general knowledge, and never guess plan names, prices, limits, numbers, dates, integrations or platforms.
+- Prefer the official site, its docs, pricing page, changelog and GitHub repository. If sources disagree, trust the most recent official source.
+- If no source states a value, return an empty string (or empty array). An empty field is always better than a plausible guess.
+- recentUpdates must describe dated releases or announcements from the sources, newest first. If none are dated, return an empty string.
+- bestFor, notIdealFor and verdict must follow from the facts you reported, not from assumptions about similar tools.
+- Set identityMatch to true only if the sources clearly describe this exact tool from this company. If they describe a different product, a parked or same-named domain, or nothing relevant, set identityMatch to false.
+- List in sources every URL you took a fact from."""
+
+
+def grounding_rules(url: str = "") -> str:
+    return f"{identity_rule(url)}\n\n{GROUNDING_RULES}"
+
+
+PROVENANCE_FIELDS = ("identityMatch", "sources")
+CODE_HOSTS = {"github.com", "gitlab.com", "bitbucket.org", "huggingface.co", "codeberg.org"}
+
+
+def _host_and_owner(url: str) -> tuple:
+    parsed = urlparse(url if "://" in url else f"https://{url}")
+    host = (parsed.hostname or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    owner = parsed.path.strip("/").split("/")[0].lower()
+    return host, owner
+
+
+def is_official_source(source: str, official_url: str) -> bool:
+    """True when source lives on the official site (or its subdomains), or in the same code-host account."""
+    source_host, source_owner = _host_and_owner(source)
+    official_host, official_owner = _host_and_owner(official_url)
+    if not source_host or not official_host:
+        return False
+    if official_host in CODE_HOSTS:
+        return source_host == official_host and bool(official_owner) and source_owner == official_owner
+    return (
+        source_host == official_host
+        or source_host.endswith(f".{official_host}")
+        or official_host.endswith(f".{source_host}")
+    )
+
+
+def collect_sources(*groups: Iterable[Any]) -> List[str]:
+    seen: List[str] = []
+    for group in groups:
+        for item in group or []:
+            if isinstance(item, str) and item.strip() and item.strip() not in seen:
+                seen.append(item.strip())
+    return seen
+
+
+def retrieved_only(claimed: Any, retrieved: Iterable[str]) -> List[str]:
+    """Drop model-reported sources whose site never appeared in the search results."""
+    hosts = {_host_and_owner(r)[0] for r in retrieved if isinstance(r, str)}
+    hosts.discard("")
+    return [s for s in collect_sources(claimed if isinstance(claimed, list) else []) if _host_and_owner(s)[0] in hosts]
+
+
+def verify_profile(data: Dict[str, Any], url: str = "") -> Optional[str]:
+    """Return why a generated profile cannot be trusted, or None when it passes."""
+    if data.get("identityMatch") is not True:
+        return "the model could not confirm the sources describe this tool"
+    sources = data.get("sources") if isinstance(data.get("sources"), list) else []
+    if not sources:
+        return "no sources were reported"
+    if url and not any(is_official_source(s, url) for s in sources):
+        return f"no source is on the official site {url}"
+    if not data.get("description"):
+        return "the description is empty"
+    return None
+
+
+def strip_provenance(data: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: v for k, v in data.items() if k not in PROVENANCE_FIELDS}
+
+
 def build_exa_query(company_name: str, tool_name: str, slug: str, url: str = "", category: str = "") -> str:
     subject = f"{tool_name} by {company_name}"
     if category:
@@ -84,13 +171,12 @@ def build_prompt(company_name: str, tool_name: str, slug: str, url: str = "", ca
         Official site: {url or "unknown"}
         Category: {category or "unknown"}
 
-        {identity_rule(url)}
+        Today is {current_date}.
 
         Use Google Search to find the latest information about this tool: pricing, features, recent updates.
+        Start from the official site and the tool's GitHub repository if it has one.
 
-        You can also check the GitHub repository for the tool to find the latest information about the tool.
-
-        DO NOT hallucinate pricing, features, recent updates.
+        {grounding_rules(url)}
 
         Return ONLY valid JSON, no markdown, no backticks:
         {{
@@ -106,7 +192,9 @@ def build_prompt(company_name: str, tool_name: str, slug: str, url: str = "", ca
             "recentUpdates": "string",
             "verdict": "string",
             "tags": ["string"],
-            "lastUpdated": "{current_date}"
+            "lastUpdated": "{current_date}",
+            "identityMatch": true,
+            "sources": ["https://..."]
         }}
 """
 
