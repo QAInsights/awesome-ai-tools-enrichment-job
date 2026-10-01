@@ -7,7 +7,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from ai_info import get_tool_info, is_valid_tool
-from utils import download_json
+from utils import download_json, download_readme, parse_tool_urls
 
 logging.basicConfig(
     level=logging.INFO,
@@ -51,6 +51,7 @@ def main():
     logging.info("Using provider: %s, fallback: %s", args.provider, fallback)
 
     download_json()
+    tool_urls = parse_tool_urls(download_readme())
     with open("slugs.json", "r") as f:
         tools = json.load(f)
         tool_count: int = len(tools)
@@ -60,6 +61,8 @@ def main():
             tool_name: str = tool.get("name")
             company_name: str = tool.get("company")
             slug: str = tool.get("slug")
+            category: str = tool.get("category") or ""
+            url: str = tool_urls.get((tool_name or "").strip().lower(), "")
 
             logging.info(f"Processing {idx}/{tool_count}: {tool_name}")
 
@@ -74,6 +77,8 @@ def main():
                 slug,
                 provider_name=args.provider,
                 fallback_provider_name=fallback,
+                url=url,
+                category=category,
             )
             time.sleep(0.3)
 
