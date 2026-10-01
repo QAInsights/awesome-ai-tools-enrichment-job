@@ -26,7 +26,54 @@ def download_json():
         f.write(response.text)
 
 
-def build_prompt(company_name: str, tool_name: str, slug: str) -> str:
+def download_readme() -> str:
+    url = "https://raw.githubusercontent.com/QAInsights/awesome-ai-tools/refs/heads/main/README.md"
+    import requests
+
+    response = requests.get(url, timeout=30)
+    response.raise_for_status()
+    return response.text
+
+
+README_TOOL_LINK = re.compile(r"^\|\s*\*\*\[(.+?)\]\((https?://[^)\s]+)\)\*\*\s*\|", re.MULTILINE)
+
+
+def parse_tool_urls(readme: str) -> Dict[str, str]:
+    """Map lower-cased catalog tool names to the official URL linked in the README table."""
+    urls: Dict[str, str] = {}
+    for name, url in README_TOOL_LINK.findall(readme):
+        urls.setdefault(name.strip().lower(), url)
+    return urls
+
+
+IDENTITY_RULE = (
+    "Search results may include unrelated products, projects or domains that share this tool's name. "
+    "Describe only the tool made by the named company"
+)
+
+
+def identity_rule(url: str = "") -> str:
+    site = f" whose official site is {url}" if url else ""
+    return (
+        f"{IDENTITY_RULE}{site}. Ignore any result about a different product, and never describe "
+        "a same-named website, domain registration or unrelated project."
+    )
+
+
+def build_exa_query(company_name: str, tool_name: str, slug: str, url: str = "", category: str = "") -> str:
+    subject = f"{tool_name} by {company_name}"
+    if category:
+        subject += f", listed as {category}"
+    if url:
+        subject += f", official site {url}"
+    return (
+        f"Find the latest information about {subject} (also known as {slug}). "
+        f"What is its pricing model, key features, best use cases, not ideal use cases, "
+        f"recent updates, and a short verdict?"
+    )
+
+
+def build_prompt(company_name: str, tool_name: str, slug: str, url: str = "", category: str = "") -> str:
     current_date = datetime.now().strftime("%Y-%m-%d")
     return f"""
         You are writing a tool profile for ai.dosa.dev,
@@ -34,6 +81,10 @@ def build_prompt(company_name: str, tool_name: str, slug: str) -> str:
 
         Tool name: {tool_name}
         Company: {company_name}
+        Official site: {url or "unknown"}
+        Category: {category or "unknown"}
+
+        {identity_rule(url)}
 
         Use Google Search to find the latest information about this tool: pricing, features, recent updates.
 

@@ -21,20 +21,22 @@ def get_tool_info(
     slug: str,
     provider_name: Optional[str] = None,
     fallback_provider_name: Optional[str] = None,
+    url: str = "",
+    category: str = "",
 ):
     """Fetch tool profile from the requested provider, falling back on failure."""
     primary_name = provider_name or "exa"
     logging.info("Getting info for %s using provider %s", slug, primary_name)
     primary = get_provider(primary_name)
     try:
-        data = primary.get_tool_profile(company_name, tool_name, slug)
+        data = primary.get_tool_profile(company_name, tool_name, slug, url, category)
     except Exception as e:
         logging.warning("Primary provider %s failed for %s: %s", primary_name, slug, e)
         if not fallback_provider_name:
             raise
         fallback = get_provider(fallback_provider_name)
         logging.info("Falling back to %s for %s", fallback_provider_name, slug)
-        data = fallback.get_tool_profile(company_name, tool_name, slug)
+        data = fallback.get_tool_profile(company_name, tool_name, slug, url, category)
     prepare_enriched_data(data, slug)
 
 

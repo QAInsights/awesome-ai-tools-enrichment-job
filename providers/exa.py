@@ -9,7 +9,7 @@ from exa_py import Exa
 
 from constants import DEFAULT_EXA_MAX_RETRIES, DEFAULT_EXA_MODEL, DEFAULT_EXA_NUM_RESULTS
 from providers.base import ToolInfoProvider
-from utils import extract_json, normalize_tool_profile
+from utils import build_exa_query, extract_json, identity_rule, normalize_tool_profile
 
 logger = logging.getLogger(__name__)
 
@@ -64,8 +64,10 @@ class ExaProvider(ToolInfoProvider):
             self._client = Exa(api_key=self.api_key)
         return self._client
 
-    def get_tool_profile(self, company_name: str, tool_name: str, slug: str) -> Dict[str, Any]:
-        query = self._build_query(company_name, tool_name, slug)
+    def get_tool_profile(
+        self, company_name: str, tool_name: str, slug: str, url: str = "", category: str = ""
+    ) -> Dict[str, Any]:
+        query = build_exa_query(company_name, tool_name, slug, url, category)
         logger.info("Exa query for %s: %s", slug, query)
         last_exception: Optional[Exception] = None
         for attempt in range(1, self.max_retries + 1):
@@ -76,7 +78,7 @@ class ExaProvider(ToolInfoProvider):
                     num_results=self.num_results,
                     contents={"highlights": True},
                     output_schema=DEFAULT_OUTPUT_SCHEMA,
-                    system_prompt=DEFAULT_SYSTEM_PROMPT,
+                    system_prompt=f"{DEFAULT_SYSTEM_PROMPT}\n\n{identity_rule(url)}",
                 )
                 if response.cost_dollars:
                     logger.info("Exa cost for %s: $%.6f", slug, response.cost_dollars.total)
@@ -110,10 +112,3 @@ class ExaProvider(ToolInfoProvider):
             return True
         # JSON parsing or transient errors may be worth one retry.
         return attempt < self.max_retries
-
-    def _build_query(self, company_name: str, tool_name: str, slug: str) -> str:
-        return (
-            f"Find the latest information about {tool_name} by {company_name} "
-            f"(also known as {slug}). What is its pricing model, key features, "
-            f"best use cases, not ideal use cases, recent updates, and a short verdict?"
-        )

@@ -24,8 +24,10 @@ class GeminiProvider(ToolInfoProvider):
             http_options=types.HttpOptions(timeout=120000),
         )
 
-    def get_tool_profile(self, company_name: str, tool_name: str, slug: str) -> Dict[str, Any]:
-        prompt = build_prompt(company_name, tool_name, slug)
+    def get_tool_profile(
+        self, company_name: str, tool_name: str, slug: str, url: str = "", category: str = ""
+    ) -> Dict[str, Any]:
+        prompt = build_prompt(company_name, tool_name, slug, url, category)
         logger.info(prompt)
         response_text: Optional[str] = None
         for model in [GEMINI_MODEL, GEMINI_MODEL_BACKUP]:
