@@ -9,7 +9,14 @@ from exa_py import Exa
 
 from constants import DEFAULT_EXA_MAX_RETRIES, DEFAULT_EXA_MODEL, DEFAULT_EXA_NUM_RESULTS
 from providers.base import ToolInfoProvider
-from utils import build_exa_query, extract_json, identity_rule, normalize_tool_profile
+from utils import (
+    build_exa_query,
+    collect_sources,
+    extract_json,
+    grounding_rules,
+    normalize_tool_profile,
+    retrieved_only,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +43,10 @@ DEFAULT_SYSTEM_PROMPT = (
     "- recentUpdates (string)\n"
     "- verdict (string)\n"
     "- tags (array of strings)\n"
-    "- lastUpdated (string YYYY-MM-DD)\n\n"
-    "Use only information from the search results. Do not hallucinate pricing or features. "
-    "If a value is unknown, use an empty string or empty array. "
+    "- lastUpdated (string YYYY-MM-DD)\n"
+    "- identityMatch (boolean)\n"
+    "- sources (array of the URLs you used)\n\n"
+    "Use only information from the search results. "
     "Do not add citation markers such as [1] or [2][3]; the text is shown directly to readers. "
     "Do not include markdown, backticks, or any explanation outside the JSON."
 )
@@ -78,7 +86,7 @@ class ExaProvider(ToolInfoProvider):
                     num_results=self.num_results,
                     contents={"highlights": True},
                     output_schema=DEFAULT_OUTPUT_SCHEMA,
-                    system_prompt=f"{DEFAULT_SYSTEM_PROMPT}\n\n{identity_rule(url)}",
+                    system_prompt=self._system_prompt(url),
                 )
                 if response.cost_dollars:
                     logger.info("Exa cost for %s: $%.6f", slug, response.cost_dollars.total)
@@ -88,6 +96,9 @@ class ExaProvider(ToolInfoProvider):
                     data = raw
                 else:
                     data = extract_json(raw, slug)
+                cited = [c.url for g in (response.output.grounding if response.output else []) for c in g.citations]
+                retrieved = [r.url for r in response.results] + cited
+                data["sources"] = collect_sources(retrieved_only(data.get("sources"), retrieved), cited)
                 current_date = datetime.now().strftime("%Y-%m-%d")
                 return normalize_tool_profile(data, slug, tool_name, company_name, current_date)
             except Exception as e:
@@ -97,6 +108,11 @@ class ExaProvider(ToolInfoProvider):
                     raise
                 time.sleep(2 ** attempt)
         raise last_exception or RuntimeError(f"Exa failed for {slug}")
+
+    @staticmethod
+    def _system_prompt(url: str) -> str:
+        today = datetime.now().strftime("%Y-%m-%d")
+        return f"{DEFAULT_SYSTEM_PROMPT}\n\nToday is {today}.\n\n{grounding_rules(url)}"
 
     def _should_retry(self, e: Exception, attempt: int) -> bool:
         msg = str(e)

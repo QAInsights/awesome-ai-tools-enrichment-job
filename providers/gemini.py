@@ -1,7 +1,7 @@
 import logging
 import os
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 from google import genai
@@ -9,7 +9,7 @@ from google.genai import types
 
 from constants import GEMINI_MODEL, GEMINI_MODEL_BACKUP
 from providers.base import ToolInfoProvider
-from utils import build_prompt, extract_json, normalize_tool_profile
+from utils import build_prompt, collect_sources, extract_json, normalize_tool_profile, retrieved_only
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -30,6 +30,7 @@ class GeminiProvider(ToolInfoProvider):
         prompt = build_prompt(company_name, tool_name, slug, url, category)
         logger.info(prompt)
         response_text: Optional[str] = None
+        grounded: List[str] = []
         for model in [GEMINI_MODEL, GEMINI_MODEL_BACKUP]:
             for attempt in range(1, 4):
                 try:
@@ -40,6 +41,7 @@ class GeminiProvider(ToolInfoProvider):
                         config=self.config,
                     )
                     response_text = response.text
+                    grounded = self._grounded_sites(response)
                     break
                 except Exception as e:
                     error_str = str(e)
@@ -64,4 +66,18 @@ class GeminiProvider(ToolInfoProvider):
         if not response_text:
             raise RuntimeError(f"Gemini failed to produce a response for {slug}")
         data = extract_json(response_text, slug)
+        data["sources"] = collect_sources(retrieved_only(data.get("sources"), grounded), grounded)
         return normalize_tool_profile(data, slug, tool_name, company_name)
+
+    @staticmethod
+    def _grounded_sites(response: types.GenerateContentResponse) -> List[str]:
+        """Sites Google Search actually returned; chunk URIs are redirects, so use the domain or title."""
+        sites: List[str] = []
+        for candidate in response.candidates or []:
+            metadata = candidate.grounding_metadata
+            for chunk in (metadata.grounding_chunks if metadata else None) or []:
+                if chunk.web:
+                    site = chunk.web.domain or chunk.web.title
+                    if site:
+                        sites.append(site)
+        return sites
