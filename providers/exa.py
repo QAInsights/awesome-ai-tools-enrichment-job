@@ -39,6 +39,7 @@ DEFAULT_SYSTEM_PROMPT = (
     "- lastUpdated (string YYYY-MM-DD)\n\n"
     "Use only information from the search results. Do not hallucinate pricing or features. "
     "If a value is unknown, use an empty string or empty array. "
+    "Do not add citation markers such as [1] or [2][3]; the text is shown directly to readers. "
     "Do not include markdown, backticks, or any explanation outside the JSON."
 )
 

@@ -5,6 +5,17 @@ from typing import Any, Dict, Optional
 
 from constants import REQUIRED_PROFILE_FIELDS, VALID_PRICING
 
+CITATION_MARKER = re.compile(r"\s*\[\d+(?:\s*[,\u2013-]\s*\d+)*\]")
+
+
+def strip_citations(value: Any) -> Any:
+    """Remove search-result citation markers such as "[5][2]" from profile text."""
+    if isinstance(value, str):
+        return CITATION_MARKER.sub("", value).strip()
+    if isinstance(value, list):
+        return [strip_citations(item) for item in value]
+    return value
+
 
 def download_json():
     url = "https://raw.githubusercontent.com/QAInsights/awesome-ai-tools/refs/heads/main/data/slugs.json"
@@ -91,6 +102,8 @@ def normalize_tool_profile(
         data["keyFeatures"] = []
     if not isinstance(data["tags"], list):
         data["tags"] = []
+    for field in REQUIRED_PROFILE_FIELDS:
+        data[field] = strip_citations(data[field])
     pricing = str(data.get("pricing", "")).lower().strip()
     data["pricing"] = pricing if pricing in VALID_PRICING else "unknown"
     return data
