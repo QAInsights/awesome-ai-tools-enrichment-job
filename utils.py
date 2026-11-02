@@ -89,19 +89,31 @@ def grounding_rules(url: str = "") -> str:
 PROVENANCE_FIELDS = ("identityMatch", "sources")
 CURATED_FIELDS = ("status", "successor")
 _PRICE = r"\$\d[\d.,]*"
-_GROUP_LABEL = "".join(f"(?<!{w})" for w in ("plans", "tiers", "subscriptions"))
 _NO_RANGE = rf"(?![^)]*(?:\bto|[-\u2013])\s*{_PRICE})"
 # One plan with one price: "Pro ($20/month)" or "$8/month (Plus)". Ranges such as "plans ($8 to $200)" don't count.
 PRICED_PLAN = re.compile(
-    rf"[A-Za-z](?:[\w.+' -]*[\w.+'])?{_GROUP_LABEL}\s*\(\s*{_PRICE}{_NO_RANGE}[^)]*\)"
+    rf"(?P<name>[A-Za-z](?:[\w.+' -]*[\w.+'])?)\s*\(\s*{_PRICE}{_NO_RANGE}[^)]*\)"
     rf"|{_PRICE}\s*/\s*[a-z]+\s*\(\s*[A-Za-z][^)]*\)",
     re.IGNORECASE,
 )
+_PLAN_LABELS = {"plan", "tier", "subscription"}
+_GENERIC_WORDS = {"paid", "a", "an", "the", "one", "single", "each", "any", "monthly", "annual", "yearly"}
+
+
+def _names_a_plan(name: Optional[str]) -> bool:
+    """False for group or generic labels such as "Paid tiers" or "a paid plan"; "Pro plan" still names a plan."""
+    if name is None:
+        return True
+    words = re.findall(r"[\w.+']+", name.lower())
+    last = words[-1]
+    if last.rstrip("s") not in _PLAN_LABELS:
+        return True
+    return last in _PLAN_LABELS and len(words) > 1 and words[-2] not in _GENERIC_WORDS
 
 
 def has_priced_plans(detail: Any) -> bool:
     """True when pricing text names a plan next to its price, e.g. "Pro ($20/mo)" or "$8/month (Plus)"."""
-    return isinstance(detail, str) and bool(PRICED_PLAN.search(detail))
+    return isinstance(detail, str) and any(_names_a_plan(m.group("name")) for m in PRICED_PLAN.finditer(detail))
 
 
 def carry_over(data: Dict[str, Any], previous: Optional[Dict[str, Any]]) -> Dict[str, Any]:
