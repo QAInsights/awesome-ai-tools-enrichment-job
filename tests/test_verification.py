@@ -5,7 +5,7 @@ import unittest
 from unittest import mock
 
 import ai_info
-from utils import build_prompt, is_official_source, retrieved_only, strip_provenance, verify_profile
+from utils import build_prompt, carry_over, has_priced_plans, is_official_source, retrieved_only, strip_provenance, verify_profile
 
 
 def profile(**overrides):
@@ -63,6 +63,36 @@ class VerifyProfileTest(unittest.TestCase):
         self.assertIn("An empty field is always better than a plausible guess", prompt)
         self.assertIn('"identityMatch": true', prompt)
 
+    def test_prompt_asks_for_priced_plans(self):
+        self.assertIn("Plan ($X/month)", build_prompt("Anjadhe", "nenva", "nenva", "https://nenva.co"))
+
+
+class CarryOverTest(unittest.TestCase):
+    def test_recognises_priced_plans(self):
+        self.assertTrue(has_priced_plans("Claude Pro ($20/mo), Max 5x ($100/mo)."))
+        self.assertTrue(has_priced_plans("Paid plans start at $8/month (Plus)."))
+        self.assertFalse(has_priced_plans("Subscriptions (Plus, Premium, Super, Ultra) ranging from $8/month to $200/month."))
+        self.assertFalse(has_priced_plans("Available via plans (Pro, Max, Team, Enterprise)."))
+        self.assertFalse(has_priced_plans(None))
+
+    def test_keeps_curated_lifecycle_fields(self):
+        previous = {"slug": "continue", "status": "discontinued", "successor": "cursor"}
+        self.assertEqual(
+            carry_over({"slug": "continue", "description": "New."}, previous),
+            {"slug": "continue", "description": "New.", "status": "discontinued", "successor": "cursor"},
+        )
+
+    def test_keeps_published_priced_plans_when_new_text_drops_prices(self):
+        previous = {"pricingDetail": "Pro ($20/mo), Max ($100/mo)."}
+        self.assertEqual(carry_over({"pricingDetail": "Pro and Max plans."}, previous), previous)
+
+    def test_prefers_new_priced_plans(self):
+        fresh = {"pricingDetail": "Pro ($25/mo)."}
+        self.assertEqual(carry_over(dict(fresh), {"pricingDetail": "Pro ($20/mo)."}), fresh)
+
+    def test_without_previous_profile_nothing_changes(self):
+        self.assertEqual(carry_over({"pricingDetail": "Free."}, None), {"pricingDetail": "Free."})
+
 
 class FakeProvider:
     def __init__(self, result):
@@ -111,6 +141,12 @@ class GetToolInfoTest(unittest.TestCase):
             {"exa": profile(identityMatch=False), "gemini": RuntimeError("down")}, previous=previous
         )
         self.assertEqual(stored, [previous])
+
+    def test_carries_curated_fields_into_a_fresh_profile(self):
+        previous = {"slug": "nenva", "status": "discontinued", "successor": "cursor"}
+        stored = self.run_with({"exa": profile(), "gemini": RuntimeError("unused")}, previous=previous)
+        self.assertEqual(stored[0]["status"], "discontinued")
+        self.assertEqual(stored[0]["successor"], "cursor")
 
     def test_leaves_out_a_new_tool_with_no_trustworthy_profile(self):
         self.assertEqual(self.run_with({"exa": profile(sources=[]), "gemini": profile(sources=[])}), [])

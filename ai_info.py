@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
 from providers import get_provider
-from utils import strip_provenance, verify_profile
+from utils import carry_over, strip_provenance, verify_profile
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,7 +39,7 @@ def get_tool_info(
             continue
         problem = verify_profile(data, url)
         if problem is None:
-            prepare_enriched_data(strip_provenance(data), slug)
+            prepare_enriched_data(carry_over(strip_provenance(data), previous), slug)
             return
         logging.warning("Rejected %s profile for %s: %s (sources: %s)", name, slug, problem, data.get("sources"))
     if previous:
