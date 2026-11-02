@@ -88,7 +88,14 @@ def grounding_rules(url: str = "") -> str:
 
 PROVENANCE_FIELDS = ("identityMatch", "sources")
 CURATED_FIELDS = ("status", "successor")
-PRICED_PLAN = re.compile(r"[A-Za-z][\w.+' -]*\(\s*\$\d|\$\d[\d.,]*\s*/\s*[a-z]+\s*\(\s*[A-Za-z]")
+_PRICE = r"\$\d[\d.,]*"
+_GROUP_LABEL = "".join(f"(?<!{w})" for w in ("plan", "plans", "tier", "tiers", "subscription", "subscriptions"))
+# One plan with one price: "Pro ($20/month)" or "$8/month (Plus)". Ranges such as "plans ($8 to $200)" don't count.
+PRICED_PLAN = re.compile(
+    rf"[A-Za-z](?:[\w.+' -]*[\w.+'])?{_GROUP_LABEL}\s*\(\s*{_PRICE}[^)$]*\)"
+    rf"|{_PRICE}\s*/\s*[a-z]+\s*\(\s*[A-Za-z][^)$]*\)",
+    re.IGNORECASE,
+)
 
 
 def has_priced_plans(detail: Any) -> bool:
@@ -97,13 +104,17 @@ def has_priced_plans(detail: Any) -> bool:
 
 
 def carry_over(data: Dict[str, Any], previous: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """Keep hand-curated fields from the published profile, and its priced plans if the new text dropped them."""
+    """Keep hand-curated fields from the published profile, and its priced plans if a still-paid tool's new text dropped them."""
     if not previous:
         return data
     for field in CURATED_FIELDS:
-        if previous.get(field) and not data.get(field):
+        if previous.get(field):
             data[field] = previous[field]
-    if has_priced_plans(previous.get("pricingDetail")) and not has_priced_plans(data.get("pricingDetail")):
+    if (
+        data.get("pricing") != "free"
+        and has_priced_plans(previous.get("pricingDetail"))
+        and not has_priced_plans(data.get("pricingDetail"))
+    ):
         data["pricingDetail"] = previous["pricingDetail"]
     return data
 CODE_HOSTS = {"github.com", "gitlab.com", "bitbucket.org", "huggingface.co", "codeberg.org"}

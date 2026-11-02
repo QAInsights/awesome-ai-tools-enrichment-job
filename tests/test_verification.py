@@ -74,6 +74,9 @@ class CarryOverTest(unittest.TestCase):
         self.assertFalse(has_priced_plans("Subscriptions (Plus, Premium, Super, Ultra) ranging from $8/month to $200/month."))
         self.assertFalse(has_priced_plans("Available via plans (Pro, Max, Team, Enterprise)."))
         self.assertFalse(has_priced_plans(None))
+        self.assertTrue(has_priced_plans("Max 5x ($100/mo) and Pro ($20/month, billed annually)."))
+        self.assertFalse(has_priced_plans("Plus, Premium plans ($8/month to $200/month)."))
+        self.assertFalse(has_priced_plans("Paid tiers ($8/month)."))
 
     def test_keeps_curated_lifecycle_fields(self):
         previous = {"slug": "continue", "status": "discontinued", "successor": "cursor"}
@@ -81,6 +84,15 @@ class CarryOverTest(unittest.TestCase):
             carry_over({"slug": "continue", "description": "New."}, previous),
             {"slug": "continue", "description": "New.", "status": "discontinued", "successor": "cursor"},
         )
+
+    def test_curated_fields_override_generated_ones(self):
+        previous = {"status": "discontinued", "successor": "cursor"}
+        self.assertEqual(carry_over({"status": "active", "successor": "other"}, previous), previous)
+
+    def test_tool_that_became_free_keeps_its_new_text(self):
+        fresh = {"pricing": "free", "pricingDetail": "Now free for everyone."}
+        previous = {"pricing": "paid", "pricingDetail": "Pro ($20/month)."}
+        self.assertEqual(carry_over(dict(fresh), previous), fresh)
 
     def test_keeps_published_priced_plans_when_new_text_drops_prices(self):
         previous = {"pricingDetail": "Pro ($20/mo), Max ($100/mo)."}
