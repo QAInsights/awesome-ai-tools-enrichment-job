@@ -77,6 +77,9 @@ class CarryOverTest(unittest.TestCase):
         self.assertTrue(has_priced_plans("Max 5x ($100/mo) and Pro ($20/month, billed annually)."))
         self.assertFalse(has_priced_plans("Plus, Premium plans ($8/month to $200/month)."))
         self.assertFalse(has_priced_plans("Paid tiers ($8/month)."))
+        self.assertTrue(has_priced_plans("Code Max ($10/month including $50 in credits)."))
+        self.assertTrue(has_priced_plans("Starting at $30/month (Heavy at $70/month; Max at $100/month)."))
+        self.assertFalse(has_priced_plans("Team plan ($19 - $39 per user)."))
 
     def test_keeps_curated_lifecycle_fields(self):
         previous = {"slug": "continue", "status": "discontinued", "successor": "cursor"}

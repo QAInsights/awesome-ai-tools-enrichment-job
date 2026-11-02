@@ -90,10 +90,11 @@ PROVENANCE_FIELDS = ("identityMatch", "sources")
 CURATED_FIELDS = ("status", "successor")
 _PRICE = r"\$\d[\d.,]*"
 _GROUP_LABEL = "".join(f"(?<!{w})" for w in ("plan", "plans", "tier", "tiers", "subscription", "subscriptions"))
+_NO_RANGE = rf"(?![^)]*(?:\bto|[-\u2013])\s*{_PRICE})"
 # One plan with one price: "Pro ($20/month)" or "$8/month (Plus)". Ranges such as "plans ($8 to $200)" don't count.
 PRICED_PLAN = re.compile(
-    rf"[A-Za-z](?:[\w.+' -]*[\w.+'])?{_GROUP_LABEL}\s*\(\s*{_PRICE}[^)$]*\)"
-    rf"|{_PRICE}\s*/\s*[a-z]+\s*\(\s*[A-Za-z][^)$]*\)",
+    rf"[A-Za-z](?:[\w.+' -]*[\w.+'])?{_GROUP_LABEL}\s*\(\s*{_PRICE}{_NO_RANGE}[^)]*\)"
+    rf"|{_PRICE}\s*/\s*[a-z]+\s*\(\s*[A-Za-z][^)]*\)",
     re.IGNORECASE,
 )
 
