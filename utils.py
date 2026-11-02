@@ -89,7 +89,7 @@ def grounding_rules(url: str = "") -> str:
 PROVENANCE_FIELDS = ("identityMatch", "sources")
 CURATED_FIELDS = ("status", "successor")
 _PRICE = r"\$\d[\d.,]*"
-_GROUP_LABEL = "".join(f"(?<!{w})" for w in ("plan", "plans", "tier", "tiers", "subscription", "subscriptions"))
+_GROUP_LABEL = "".join(f"(?<!{w})" for w in ("plans", "tiers", "subscriptions"))
 _NO_RANGE = rf"(?![^)]*(?:\bto|[-\u2013])\s*{_PRICE})"
 # One plan with one price: "Pro ($20/month)" or "$8/month (Plus)". Ranges such as "plans ($8 to $200)" don't count.
 PRICED_PLAN = re.compile(
