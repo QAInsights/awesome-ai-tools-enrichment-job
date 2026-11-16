@@ -118,6 +118,15 @@ class CarryOverTest(unittest.TestCase):
         fresh = {"pricingDetail": "Pro ($25/mo)."}
         self.assertEqual(carry_over(dict(fresh), {"pricingDetail": "Pro ($20/mo)."}), fresh)
 
+    def test_keeps_published_name_and_company(self):
+        previous = {"name": "Superset", "company": "Superset"}
+        data = carry_over({"name": "Paradev", "company": "Paradev Inc."}, previous)
+        self.assertEqual((data["name"], data["company"]), ("Superset", "Superset"))
+
+    def test_open_source_pricing_is_not_downgraded(self):
+        data = carry_over({"pricing": "freemium"}, {"pricing": "open-source"})
+        self.assertEqual(data["pricing"], "open-source")
+
     def test_without_previous_profile_nothing_changes(self):
         self.assertEqual(carry_over({"pricingDetail": "Free."}, None), {"pricingDetail": "Free."})
 
@@ -175,6 +184,18 @@ class GetToolInfoTest(unittest.TestCase):
         stored = self.run_with({"exa": profile(), "gemini": RuntimeError("unused")}, previous=previous)
         self.assertEqual(stored[0]["status"], "discontinued")
         self.assertEqual(stored[0]["successor"], "cursor")
+
+    def test_publishes_curated_and_lifecycle_profiles_without_calling_providers(self):
+        for previous in (
+            {"slug": "nenva", "description": "Hand-written.", "curated": True},
+            {"slug": "nenva", "description": "Winding down on Nov 20.", "status": "winding-down"},
+        ):
+            ai_info.enriched_data.clear()
+            with mock.patch.object(ai_info, "get_provider") as get_provider:
+                ai_info.get_tool_info("Anjadhe", "nenva", "nenva", "exa", "gemini", previous=previous)
+            get_provider.assert_not_called()
+            with open("enriched_data.json", encoding="utf-8") as f:
+                self.assertEqual(json.load(f), [previous])
 
     def test_leaves_out_a_new_tool_with_no_trustworthy_profile(self):
         self.assertEqual(self.run_with({"exa": profile(sources=[]), "gemini": profile(sources=[])}), [])

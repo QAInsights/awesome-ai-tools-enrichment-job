@@ -88,6 +88,7 @@ def grounding_rules(url: str = "") -> str:
 
 PROVENANCE_FIELDS = ("identityMatch", "sources")
 CURATED_FIELDS = ("status", "successor")
+IDENTITY_FIELDS = ("name", "company")
 _PRICE = r"\$\d[\d.,]*"
 _NO_RANGE = rf"(?![^)]*(?:\bto|[-\u2013])\s*{_PRICE})"
 # One plan with one price: "Pro ($20/month)" or "$8/month (Plus)". Ranges such as "plans ($8 to $200)" don't count.
@@ -116,13 +117,20 @@ def has_priced_plans(detail: Any) -> bool:
     return isinstance(detail, str) and any(_names_a_plan(m.group("name")) for m in PRICED_PLAN.finditer(detail))
 
 
+def is_locked(previous: Optional[Dict[str, Any]]) -> bool:
+    """Profiles marked "curated": true, or with a lifecycle status, are hand-maintained and published as-is."""
+    return bool(previous) and (previous.get("curated") is True or bool(previous.get("status")))
+
+
 def carry_over(data: Dict[str, Any], previous: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """Keep hand-curated fields from the published profile, and its priced plans if a still-paid tool's new text dropped them."""
+    """Keep hand-curated fields, the published name and company, open-source pricing, and priced plans a still-paid tool's new text dropped."""
     if not previous:
         return data
-    for field in CURATED_FIELDS:
+    for field in CURATED_FIELDS + IDENTITY_FIELDS:
         if previous.get(field):
             data[field] = previous[field]
+    if previous.get("pricing") == "open-source":
+        data["pricing"] = "open-source"
     if (
         data.get("pricing") != "free"
         and has_priced_plans(previous.get("pricingDetail"))
