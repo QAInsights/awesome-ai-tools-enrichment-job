@@ -127,6 +127,11 @@ class CarryOverTest(unittest.TestCase):
         data = carry_over({"pricing": "freemium"}, {"pricing": "open-source"})
         self.assertEqual(data["pricing"], "open-source")
 
+    def test_open_source_tool_that_dropped_paid_plans_keeps_fresh_text(self):
+        previous = {"pricing": "open-source", "pricingDetail": "Free core, Pro ($20/month)."}
+        data = carry_over({"pricing": "free", "pricingDetail": "Free and open source."}, previous)
+        self.assertEqual(data, {"pricing": "open-source", "pricingDetail": "Free and open source."})
+
     def test_without_previous_profile_nothing_changes(self):
         self.assertEqual(carry_over({"pricingDetail": "Free."}, None), {"pricingDetail": "Free."})
 

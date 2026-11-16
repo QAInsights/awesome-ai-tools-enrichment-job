@@ -129,14 +129,14 @@ def carry_over(data: Dict[str, Any], previous: Optional[Dict[str, Any]]) -> Dict
     for field in CURATED_FIELDS + IDENTITY_FIELDS:
         if previous.get(field):
             data[field] = previous[field]
-    if previous.get("pricing") == "open-source":
-        data["pricing"] = "open-source"
     if (
         data.get("pricing") != "free"
         and has_priced_plans(previous.get("pricingDetail"))
         and not has_priced_plans(data.get("pricingDetail"))
     ):
         data["pricingDetail"] = previous["pricingDetail"]
+    if previous.get("pricing") == "open-source":
+        data["pricing"] = "open-source"
     return data
 CODE_HOSTS = {"github.com", "gitlab.com", "bitbucket.org", "huggingface.co", "codeberg.org"}
 
