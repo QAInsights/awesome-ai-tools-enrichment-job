@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
 from providers import get_provider
-from utils import carry_over, strip_provenance, verify_profile
+from utils import carry_over, is_locked, strip_provenance, verify_profile
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,6 +27,10 @@ def get_tool_info(
     previous: Optional[Dict[str, Any]] = None,
 ):
     """Store the first profile that passes verification; otherwise keep the published one."""
+    if is_locked(previous):
+        logging.info("Keeping the curated profile for %s", slug)
+        prepare_enriched_data(previous, slug)
+        return
     names = [provider_name or "exa"]
     if fallback_provider_name and fallback_provider_name not in names:
         names.append(fallback_provider_name)
