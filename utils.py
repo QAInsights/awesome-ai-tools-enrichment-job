@@ -129,7 +129,8 @@ def carry_over(data: Dict[str, Any], previous: Optional[Dict[str, Any]]) -> Dict
     for field in CURATED_FIELDS + IDENTITY_FIELDS:
         if previous.get(field):
             data[field] = previous[field]
-    if not str(data.get("pricingDetail") or "").strip() and previous.get("pricingDetail"):
+    became_free_text = data.get("pricing") == "free" and has_priced_plans(previous.get("pricingDetail"))
+    if not str(data.get("pricingDetail") or "").strip() and previous.get("pricingDetail") and not became_free_text:
         data["pricingDetail"] = previous["pricingDetail"]
     elif (
         data.get("pricing") != "free"
