@@ -14,6 +14,7 @@ logging.basicConfig(
 load_dotenv()
 
 enriched_data: list[dict] = []
+quality_notes: list[str] = []
 
 
 def get_tool_info(
@@ -43,11 +44,16 @@ def get_tool_info(
             continue
         problem = verify_profile(data, url)
         if problem is None:
-            prepare_enriched_data(carry_over(strip_provenance(data), previous), slug)
+            notes: list[str] = []
+            prepare_enriched_data(carry_over(strip_provenance(data), previous, notes), slug)
+            for note in notes:
+                logging.info("%s: %s", slug, note)
+                quality_notes.append(f"{slug}: {note}")
             return
         logging.warning("Rejected %s profile for %s: %s (sources: %s)", name, slug, problem, data.get("sources"))
     if previous:
         logging.warning("Keeping the published profile for %s", slug)
+        quality_notes.append(f"{slug}: kept the whole published profile: no new profile passed verification")
         prepare_enriched_data(previous, slug)
     else:
         logging.error("No trustworthy profile for %s; leaving it out", slug)
@@ -67,3 +73,12 @@ def prepare_enriched_data(data: Dict[str, Any], slug: str):
     logging.info("Enriched %s items", len(enriched_data))
     with open("enriched_data.json", "w", encoding="utf-8") as f:
         json.dump(enriched_data, f, indent=2, ensure_ascii=False)
+
+
+def write_quality_report(path: str = "quality_report.md"):
+    """Summarise the fields the quality gate kept, for the data pull request."""
+    kept = len({note.split(":", 1)[0] for note in quality_notes})
+    lines = [f"Profiles written: {len(enriched_data)}. Profiles with published content kept: {kept}.", ""]
+    lines += [f"- {note}" for note in quality_notes]
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")

@@ -45,11 +45,28 @@ jobs:
           mkdir -p target-repo/public/data
           cp enriched_data.json target-repo/public/data/enriched-tools.json
 
-      - name: Commit and push
+      - name: Open data pull request
+        env:
+          GH_TOKEN: ${{ secrets.TARGET_REPO_PAT }}
         run: |
           cd target-repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add public/data/enriched-tools.json
-          git diff --cached --quiet || git commit -m "chore: update enriched data $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          git push
+          if git diff --cached --quiet; then
+            echo "No changes to enriched data"
+            exit 0
+          fi
+          stamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          branch="enrichment/$(date -u +%Y%m%d-%H%M%S)"
+          git checkout -b "$branch"
+          git commit -m "chore: update enriched data $stamp"
+          git push origin "$branch"
+          {
+            echo "Enrichment run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo
+            cat ../quality_report.md 2>/dev/null || echo "No quality report was written."
+          } > ../pr_body.md
+          # GitHub caps PR bodies at 65,536 characters.
+          head -c 60000 ../pr_body.md > ../pr_body_trimmed.md
+          gh pr create --base main --head "$branch" --title "chore: update enriched data $(date -u +%Y-%m-%d)" --body-file ../pr_body_trimmed.md
