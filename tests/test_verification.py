@@ -128,6 +128,11 @@ class CarryOverTest(unittest.TestCase):
         data = carry_over({"pricing": "free", "pricingDetail": ""}, {"pricing": "paid", "pricingDetail": "Pro ($20/mo)."})
         self.assertEqual(data["pricingDetail"], "")
 
+    def test_free_tool_keeps_free_plan_text_when_new_text_is_empty(self):
+        previous = {"pricing": "free", "pricingDetail": "Free ($0/month)."}
+        data = carry_over({"pricing": "free", "pricingDetail": ""}, previous)
+        self.assertEqual(data["pricingDetail"], previous["pricingDetail"])
+
     def test_keeps_published_name_and_company(self):
         previous = {"name": "Superset", "company": "Superset"}
         data = carry_over({"name": "Paradev", "company": "Paradev Inc."}, previous)
