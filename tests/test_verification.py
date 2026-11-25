@@ -118,6 +118,26 @@ class CarryOverTest(unittest.TestCase):
         fresh = {"pricingDetail": "Pro ($25/mo)."}
         self.assertEqual(carry_over(dict(fresh), {"pricingDetail": "Pro ($20/mo)."}), fresh)
 
+    def test_keeps_published_pricing_text_when_new_text_is_empty(self):
+        previous = {"pricingDetail": "Free and open source; you pay your model provider."}
+        for empty in ("", "  ", None):
+            data = carry_over({"pricing": "free", "pricingDetail": empty}, previous)
+            self.assertEqual(data["pricingDetail"], previous["pricingDetail"])
+
+    def test_tool_that_became_free_does_not_keep_old_prices_in_empty_text(self):
+        data = carry_over({"pricing": "free", "pricingDetail": ""}, {"pricing": "paid", "pricingDetail": "Pro ($20/mo)."})
+        self.assertEqual(data["pricingDetail"], "")
+
+    def test_free_tool_keeps_free_plan_text_when_new_text_is_empty(self):
+        previous = {"pricing": "free", "pricingDetail": "Free ($0/month)."}
+        data = carry_over({"pricing": "free", "pricingDetail": ""}, previous)
+        self.assertEqual(data["pricingDetail"], previous["pricingDetail"])
+
+    def test_open_source_tool_keeps_its_text_when_new_text_is_empty(self):
+        previous = {"pricing": "open-source", "pricingDetail": "Free under MIT; pay your model provider."}
+        data = carry_over({"pricing": "free", "pricingDetail": ""}, previous)
+        self.assertEqual((data["pricing"], data["pricingDetail"]), ("open-source", previous["pricingDetail"]))
+
     def test_keeps_published_name_and_company(self):
         previous = {"name": "Superset", "company": "Superset"}
         data = carry_over({"name": "Paradev", "company": "Paradev Inc."}, previous)
