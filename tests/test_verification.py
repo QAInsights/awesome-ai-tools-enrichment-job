@@ -5,7 +5,7 @@ import unittest
 from unittest import mock
 
 import ai_info
-from utils import build_prompt, carry_over, has_priced_plans, is_official_source, retrieved_only, strip_provenance, verify_profile
+from utils import build_prompt, carry_over, has_priced_plans, plan_names, is_official_source, retrieved_only, strip_provenance, verify_profile
 
 
 def profile(**overrides):
@@ -136,6 +136,16 @@ class CarryOverTest(unittest.TestCase):
         notes = []
         self.assertEqual(carry_over(fresh, previous, notes)["pricingDetail"], previous["pricingDetail"])
         self.assertEqual(notes, ["kept the published pricing: the new pricing text drops business, enterprise"])
+
+    def test_plan_named_without_its_price_counts_as_dropped(self):
+        previous = {"pricing": "paid", "pricingDetail": "Pro ($20/month), Max 5x ($100/month), Max 20x ($200/month)"}
+        for fresh in ("Pro ($20/month), Max 5x ($100/month) and Max 20x plans", "Pro ($20/month), Max ($100/month)"):
+            data = carry_over({"pricing": "paid", "pricingDetail": fresh}, previous)
+            self.assertEqual(data["pricingDetail"], previous["pricingDetail"])
+
+    def test_price_qualifiers_are_not_plans(self):
+        self.assertEqual(plan_names("Pro at $10/month (including $5 of tokens), Business ($30/seat/month)"), {"business"})
+        self.assertEqual(plan_names("Paid plans start at $8/month (Plus)."), {"plus"})
 
     def test_plan_named_inside_a_sentence_still_counts(self):
         previous = {"pricing": "freemium", "pricingDetail": "Paid plans include Plus ($10/month), Pro ($20/month)."}

@@ -123,23 +123,27 @@ def is_locked(previous: Optional[Dict[str, Any]]) -> bool:
 
 
 def plan_names(detail: Any) -> set:
-    """Last word of each plan that pricing text prices, lower-cased: "Paid plans include Plus ($10/month)" gives {"plus"}."""
+    """Last word of each plan that pricing text prices, lower-cased: "Paid plans include Plus ($10/month), Max 20x ($200/month)" gives {"plus", "max 20x"}."""
     names = set()
     if not isinstance(detail, str):
         return names
     for m in PRICED_PLAN.finditer(detail):
-        if not _names_a_plan(m.group("name")):
+        name = m.group("name")
+        if name is None:
+            name = m.group("name2")
+            if not name[0].isupper():
+                continue  # a qualifier such as "$10/month (including $5 of tokens)"
+        elif not _names_a_plan(name):
             continue
-        words = re.findall(r"[\w.+']+", (m.group("name") or m.group("name2") or "").lower())
+        words = re.findall(r"[\w.+']+", name.lower())
         if len(words) > 1 and words[-1].rstrip("s") in _PLAN_LABELS:
             words = words[:-1]
-        if words and not words[-1][0].isdigit():
-            names.add(words[-1])
+        if not words:
+            continue
+        key = " ".join(words[-2:]) if words[-1][0].isdigit() and len(words) > 1 else words[-1]
+        if not key[0].isdigit():
+            names.add(key)
     return names
-
-
-def _mentions(detail: str, word: str) -> bool:
-    return re.search(rf"(?<![\w+]){re.escape(word)}(?![\w+])", detail, re.IGNORECASE) is not None
 
 
 # Facts that published pricing text explains and terse plan lists tend to drop.
@@ -165,7 +169,7 @@ def pricing_regression(data: Dict[str, Any], previous: Dict[str, Any]) -> Option
     if old_tier in VALID_PRICING and new_tier != old_tier and (old_tier, new_tier) != ("open-source", "free"):
         return f"the pricing tier changed from {old_tier} to {new_tier}"
     if old_tier != "open-source":
-        dropped = sorted(name for name in plan_names(old_detail) if not _mentions(new_detail, name))
+        dropped = sorted(plan_names(old_detail) - plan_names(new_detail))
         if dropped:
             return "the new pricing text drops " + ", ".join(dropped)
         if has_priced_plans(old_detail) and not has_priced_plans(new_detail):
