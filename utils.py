@@ -123,13 +123,15 @@ def is_locked(previous: Optional[Dict[str, Any]]) -> bool:
 
 
 def carry_over(data: Dict[str, Any], previous: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """Keep hand-curated fields, the published name and company, open-source pricing, and priced plans a still-paid tool's new text dropped."""
+    """Keep hand-curated fields, the published name and company, open-source pricing, published pricing text the new profile left empty, and priced plans a still-paid tool's new text dropped."""
     if not previous:
         return data
     for field in CURATED_FIELDS + IDENTITY_FIELDS:
         if previous.get(field):
             data[field] = previous[field]
-    if (
+    if not str(data.get("pricingDetail") or "").strip() and previous.get("pricingDetail"):
+        data["pricingDetail"] = previous["pricingDetail"]
+    elif (
         data.get("pricing") != "free"
         and has_priced_plans(previous.get("pricingDetail"))
         and not has_priced_plans(data.get("pricingDetail"))
