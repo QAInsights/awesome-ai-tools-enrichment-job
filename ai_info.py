@@ -77,7 +77,8 @@ def prepare_enriched_data(data: Dict[str, Any], slug: str):
 
 def write_quality_report(path: str = "quality_report.md"):
     """Summarise the fields the quality gate kept, for the data pull request."""
-    lines = [f"Profiles written: {len(enriched_data)}. Fields kept from the published profile: {len(quality_notes)}.", ""]
+    kept = len({note.split(":", 1)[0] for note in quality_notes})
+    lines = [f"Profiles written: {len(enriched_data)}. Profiles with published content kept: {kept}.", ""]
     lines += [f"- {note}" for note in quality_notes]
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
