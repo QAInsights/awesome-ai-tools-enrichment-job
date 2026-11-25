@@ -105,10 +105,12 @@ class CarryOverTest(unittest.TestCase):
         previous = {"status": "discontinued", "successor": "cursor"}
         self.assertEqual(carry_over({"status": "active", "successor": "other"}, previous), previous)
 
-    def test_tool_that_became_free_keeps_its_new_text(self):
-        fresh = {"pricing": "free", "pricingDetail": "Now free for everyone."}
+    def test_tier_change_keeps_published_pricing(self):
         previous = {"pricing": "paid", "pricingDetail": "Pro ($20/month)."}
-        self.assertEqual(carry_over(dict(fresh), previous), fresh)
+        for fresh in ({"pricing": "free", "pricingDetail": "Now free for everyone."}, {"pricing": "freemium", "pricingDetail": "Pro ($20/month)."}):
+            notes = []
+            self.assertEqual(carry_over(dict(fresh), previous, notes), previous)
+            self.assertIn("pricing tier changed from paid", notes[0])
 
     def test_keeps_published_priced_plans_when_new_text_drops_prices(self):
         previous = {"pricingDetail": "Pro ($20/mo), Max ($100/mo)."}
@@ -124,9 +126,49 @@ class CarryOverTest(unittest.TestCase):
             data = carry_over({"pricing": "free", "pricingDetail": empty}, previous)
             self.assertEqual(data["pricingDetail"], previous["pricingDetail"])
 
-    def test_tool_that_became_free_does_not_keep_old_prices_in_empty_text(self):
-        data = carry_over({"pricing": "free", "pricingDetail": ""}, {"pricing": "paid", "pricingDetail": "Pro ($20/mo)."})
-        self.assertEqual(data["pricingDetail"], "")
+    def test_empty_free_text_keeps_published_tier_and_text_together(self):
+        previous = {"pricing": "paid", "pricingDetail": "Pro ($20/mo)."}
+        self.assertEqual(carry_over({"pricing": "free", "pricingDetail": ""}, previous), previous)
+
+    def test_keeps_published_pricing_when_new_text_drops_a_plan(self):
+        previous = {"pricing": "freemium", "pricingDetail": "Free ($0/month), Pro ($10/month), Business ($19/user/month), Enterprise ($39/user/month)"}
+        fresh = {"pricing": "freemium", "pricingDetail": "Free ($0/month), Pro ($10/month)"}
+        notes = []
+        self.assertEqual(carry_over(fresh, previous, notes)["pricingDetail"], previous["pricingDetail"])
+        self.assertEqual(notes, ["kept the published pricing: the new pricing text drops business, enterprise"])
+
+    def test_plan_named_inside_a_sentence_still_counts(self):
+        previous = {"pricing": "freemium", "pricingDetail": "Paid plans include Plus ($10/month), Pro ($20/month)."}
+        data = carry_over({"pricing": "freemium", "pricingDetail": "Free ($0/month), Pro ($20/month)"}, previous)
+        self.assertEqual(data["pricingDetail"], previous["pricingDetail"])
+
+    def test_keeps_explanations_a_plan_list_drops(self):
+        cases = [
+            ("free", "The standalone product is sunset; it is no longer sold.", "Free ($0/month), Pro ($10/month)"),
+            ("freemium", "The core is open source. Pay for models with your own API keys, or Go ($10/month).", "Go ($10/month)"),
+            ("free", "Pantry is free and MIT-licensed.", "Free (Free)"),
+        ]
+        for tier, published, fresh in cases:
+            previous = {"pricing": tier, "pricingDetail": published}
+            self.assertEqual(carry_over({"pricing": tier, "pricingDetail": fresh}, previous), previous)
+
+    def test_keeps_prose_when_new_text_adds_unlisted_plan_prices(self):
+        previous = {"pricing": "freemium", "pricingDetail": "Included in ChatGPT Plus, Pro and Business plans."}
+        data = carry_over({"pricing": "freemium", "pricingDetail": "Plus ($20/month), Pro ($200/month)"}, previous)
+        self.assertEqual(data["pricingDetail"], previous["pricingDetail"])
+
+    def test_accepts_new_prices_that_keep_every_plan_and_fact(self):
+        previous = {"pricing": "open-source", "pricingDetail": "Free and open source under MIT; you pay your model provider."}
+        fresh = {"pricing": "open-source", "pricingDetail": "Free and open-source (MIT license); usage is billed by your model provider."}
+        self.assertEqual(carry_over(dict(fresh), previous), fresh)
+
+    def test_keeps_published_description_when_local_first_wording_is_dropped(self):
+        previous = {"description": "Edits code in local git repositories.", "tags": ["cli"]}
+        fresh = {"description": "Edits code in your git repositories.", "tags": ["CLI"], "verdict": "New."}
+        notes = []
+        data = carry_over(fresh, previous, notes)
+        self.assertEqual((data["description"], data["tags"], data["verdict"]), (previous["description"], ["cli"], "New."))
+        self.assertIn("local-first", notes[0])
 
     def test_free_tool_keeps_free_plan_text_when_new_text_is_empty(self):
         previous = {"pricing": "free", "pricingDetail": "Free ($0/month)."}

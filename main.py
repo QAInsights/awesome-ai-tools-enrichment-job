@@ -6,7 +6,7 @@ import time
 from typing import Optional
 
 from dotenv import load_dotenv
-from ai_info import get_tool_info, is_valid_tool
+from ai_info import get_tool_info, is_valid_tool, write_quality_report
 from utils import download_json, download_previous_profiles, download_readme, parse_tool_urls
 
 logging.basicConfig(
@@ -85,6 +85,7 @@ def main():
             time.sleep(0.3)
 
         logging.info(f"{tool_count} tools processed successfully!")
+    write_quality_report()
 
 
 if __name__ == "__main__":

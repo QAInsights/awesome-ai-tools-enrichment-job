@@ -94,7 +94,7 @@ _NO_RANGE = rf"(?![^)]*(?:\bto|[-\u2013])\s*{_PRICE})"
 # One plan with one price: "Pro ($20/month)" or "$8/month (Plus)". Ranges such as "plans ($8 to $200)" don't count.
 PRICED_PLAN = re.compile(
     rf"(?P<name>[A-Za-z](?:[\w.+' -]*[\w.+'])?)\s*\(\s*{_PRICE}{_NO_RANGE}[^)]*\)"
-    rf"|{_PRICE}\s*/\s*[a-z]+\s*\(\s*[A-Za-z][^)]*\)",
+    rf"|{_PRICE}\s*/\s*[a-z]+\s*\(\s*(?P<name2>[A-Za-z][^)]*)\)",
     re.IGNORECASE,
 )
 _PLAN_LABELS = {"plan", "tier", "subscription"}
@@ -122,25 +122,95 @@ def is_locked(previous: Optional[Dict[str, Any]]) -> bool:
     return bool(previous) and (previous.get("curated") is True or bool(previous.get("status")))
 
 
-def carry_over(data: Dict[str, Any], previous: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """Keep hand-curated fields, the published name and company, open-source pricing, published pricing text the new profile left empty, and priced plans a still-paid tool's new text dropped."""
+def plan_names(detail: Any) -> set:
+    """Last word of each plan that pricing text prices, lower-cased: "Paid plans include Plus ($10/month)" gives {"plus"}."""
+    names = set()
+    if not isinstance(detail, str):
+        return names
+    for m in PRICED_PLAN.finditer(detail):
+        if not _names_a_plan(m.group("name")):
+            continue
+        words = re.findall(r"[\w.+']+", (m.group("name") or m.group("name2") or "").lower())
+        if len(words) > 1 and words[-1].rstrip("s") in _PLAN_LABELS:
+            words = words[:-1]
+        if words and not words[-1][0].isdigit():
+            names.add(words[-1])
+    return names
+
+
+def _mentions(detail: str, word: str) -> bool:
+    return re.search(rf"(?<![\w+]){re.escape(word)}(?![\w+])", detail, re.IGNORECASE) is not None
+
+
+# Facts that published pricing text explains and terse plan lists tend to drop.
+PRICING_SIGNALS = (
+    ("open source", re.compile(r"open[- ]source", re.IGNORECASE)),
+    ("bring your own key", re.compile(r"\bBYOK\b|bring (?:their|your) own|own API keys?|(?:model|chosen|AI) provider", re.IGNORECASE)),
+    ("local models", re.compile(r"\blocal models?\b|run locally|self-host", re.IGNORECASE)),
+    ("the sunset", re.compile(r"\bsunset|discontinued|no longer (?:sold|available|offered)|shut(?:s|ting)? down|end[- ]of[- ]life", re.IGNORECASE)),
+    ("bundled plans", re.compile(r"\bincluded (?:in|with)\b", re.IGNORECASE)),
+    ("the licence", re.compile(r"\b(?:MIT|Apache|A?GPL|BSD|MPL)\b|licen[cs]e", re.IGNORECASE)),
+)
+# Mirrors LOCAL_HINT_RE in the directory's stack matcher.
+LOCAL_HINT = re.compile(r"\b(local(ly|-first)?|offline|self-host(ed)?|air-gap(ped)?|on-device|ollama|llama\.cpp|lm studio)\b", re.IGNORECASE)
+
+
+def pricing_regression(data: Dict[str, Any], previous: Dict[str, Any]) -> Optional[str]:
+    """Why new pricing is worse than the published pricing, or None when it can replace it."""
+    old_detail = str(previous.get("pricingDetail") or "").strip()
+    new_detail = str(data.get("pricingDetail") or "").strip()
+    old_tier, new_tier = previous.get("pricing"), data.get("pricing")
+    if old_detail and not new_detail:
+        return "the new pricing text is empty"
+    if old_tier in VALID_PRICING and new_tier != old_tier and (old_tier, new_tier) != ("open-source", "free"):
+        return f"the pricing tier changed from {old_tier} to {new_tier}"
+    if old_tier != "open-source":
+        dropped = sorted(name for name in plan_names(old_detail) if not _mentions(new_detail, name))
+        if dropped:
+            return "the new pricing text drops " + ", ".join(dropped)
+        if has_priced_plans(old_detail) and not has_priced_plans(new_detail):
+            return "the new pricing text drops plan prices"
+        if old_detail and not has_priced_plans(old_detail) and has_priced_plans(new_detail):
+            return "the new pricing text adds plan prices the published text does not list"
+    lost = [label for label, pattern in PRICING_SIGNALS if pattern.search(old_detail) and not pattern.search(new_detail)]
+    if lost:
+        return "the new pricing text no longer mentions " + ", ".join(lost)
+    return None
+
+
+def _local_corpus(profile: Dict[str, Any]) -> str:
+    tags = profile.get("tags") if isinstance(profile.get("tags"), list) else []
+    return " ".join([str(profile.get("description") or "")] + [str(t) for t in tags])
+
+
+def carry_over(
+    data: Dict[str, Any], previous: Optional[Dict[str, Any]], notes: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """Keep hand-curated fields, the published name and company, open-source pricing, and any published
+    pricing or local-first description the new profile makes worse. Reasons are appended to notes."""
     if not previous:
         return data
     for field in CURATED_FIELDS + IDENTITY_FIELDS:
         if previous.get(field):
             data[field] = previous[field]
-    became_free = data.get("pricing") == "free" and previous.get("pricing") in ("paid", "freemium")
-    if not str(data.get("pricingDetail") or "").strip() and previous.get("pricingDetail") and not became_free:
-        data["pricingDetail"] = previous["pricingDetail"]
-    elif (
-        data.get("pricing") != "free"
-        and has_priced_plans(previous.get("pricingDetail"))
-        and not has_priced_plans(data.get("pricingDetail"))
-    ):
-        data["pricingDetail"] = previous["pricingDetail"]
+    problem = pricing_regression(data, previous)
+    if problem:
+        for field in ("pricing", "pricingDetail"):
+            if field in previous:
+                data[field] = previous[field]
+        if notes is not None:
+            notes.append(f"kept the published pricing: {problem}")
+    if LOCAL_HINT.search(_local_corpus(previous)) and not LOCAL_HINT.search(_local_corpus(data)):
+        for field in ("description", "tags"):
+            if field in previous:
+                data[field] = previous[field]
+        if notes is not None:
+            notes.append("kept the published description and tags: the new ones drop the local-first wording")
     if previous.get("pricing") == "open-source":
         data["pricing"] = "open-source"
     return data
+
+
 CODE_HOSTS = {"github.com", "gitlab.com", "bitbucket.org", "huggingface.co", "codeberg.org"}
 
 
