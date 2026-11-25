@@ -163,6 +163,7 @@ class CarryOverTest(unittest.TestCase):
             ("free", "The standalone product is sunset; it is no longer sold.", "Free ($0/month), Pro ($10/month)"),
             ("freemium", "The core is open source. Pay for models with your own API keys, or Go ($10/month).", "Go ($10/month)"),
             ("free", "Pantry is free and MIT-licensed.", "Free (Free)"),
+            ("freemium", "Pro at $10/month (including $5 of tokens), Business ($30/seat/month). Extra usage is billed at list price plus 10%.", "Pro ($10/month), Business ($30/seat/month)"),
         ]
         for tier, published, fresh in cases:
             previous = {"pricing": tier, "pricingDetail": published}

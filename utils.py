@@ -153,6 +153,7 @@ PRICING_SIGNALS = (
     ("local models", re.compile(r"\blocal models?\b|run locally|self-host", re.IGNORECASE)),
     ("the sunset", re.compile(r"\bsunset|discontinued|no longer (?:sold|available|offered)|shut(?:s|ting)? down|end[- ]of[- ]life", re.IGNORECASE)),
     ("bundled plans", re.compile(r"\bincluded (?:in|with)\b", re.IGNORECASE)),
+    ("usage terms", re.compile(r"\btokens?\b|\bcredits?\b|\busage\b|\bmarkup\b|\d+%", re.IGNORECASE)),
     ("the licence", re.compile(r"\b(?:MIT|Apache|A?GPL|BSD|MPL)\b|licen[cs]e", re.IGNORECASE)),
 )
 # Mirrors LOCAL_HINT_RE in the directory's stack matcher.
