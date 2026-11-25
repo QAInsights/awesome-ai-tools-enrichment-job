@@ -169,6 +169,11 @@ class CarryOverTest(unittest.TestCase):
             previous = {"pricing": tier, "pricingDetail": published}
             self.assertEqual(carry_over({"pricing": tier, "pricingDetail": fresh}, previous), previous)
 
+    def test_itemized_plan_keeps_its_published_name(self):
+        previous = {"pricing": "freemium", "pricingDetail": "Plus ($20/month), Pro ($100/month or $200/month)"}
+        fresh = {"pricing": "freemium", "pricingDetail": "Plus ($20/month), Pro 100 ($100/month), Pro 200 ($200/month)"}
+        self.assertEqual(carry_over(dict(fresh), previous), fresh)
+
     def test_keeps_prose_when_new_text_adds_unlisted_plan_prices(self):
         previous = {"pricing": "freemium", "pricingDetail": "Included in ChatGPT Plus, Pro and Business plans."}
         data = carry_over({"pricing": "freemium", "pricingDetail": "Plus ($20/month), Pro ($200/month)"}, previous)

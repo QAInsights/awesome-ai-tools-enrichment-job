@@ -169,7 +169,8 @@ def pricing_regression(data: Dict[str, Any], previous: Dict[str, Any]) -> Option
         return "the new pricing text is empty"
     if old_tier in VALID_PRICING and new_tier != old_tier and (old_tier, new_tier) != ("open-source", "free"):
         return f"the pricing tier changed from {old_tier} to {new_tier}"
-    dropped = sorted(plan_names(old_detail) - plan_names(new_detail))
+    new_plans = plan_names(new_detail)
+    dropped = sorted(n for n in plan_names(old_detail) - new_plans if not any(m.startswith(n + " ") for m in new_plans))
     if dropped:
         return "the new pricing text drops " + ", ".join(dropped)
     if has_priced_plans(old_detail) and not has_priced_plans(new_detail):
