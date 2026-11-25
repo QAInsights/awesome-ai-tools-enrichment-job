@@ -135,7 +135,13 @@ class CarryOverTest(unittest.TestCase):
         fresh = {"pricing": "freemium", "pricingDetail": "Free ($0/month), Pro ($10/month)"}
         notes = []
         self.assertEqual(carry_over(fresh, previous, notes)["pricingDetail"], previous["pricingDetail"])
-        self.assertEqual(notes, ["kept the published pricing: the new pricing text drops business, enterprise"])
+        self.assertEqual(notes, ["kept the published pricing and verdict: the new pricing text drops business, enterprise"])
+
+    def test_kept_pricing_keeps_the_verdict_that_cites_it(self):
+        previous = {"pricing": "paid", "pricingDetail": "Pro ($20/month)", "verdict": "Good value at $20."}
+        fresh = {"pricing": "paid", "pricingDetail": "Scale ($500/month)", "verdict": "Worth it at $500.", "bestFor": "Teams."}
+        data = carry_over(fresh, previous)
+        self.assertEqual((data["pricingDetail"], data["verdict"], data["bestFor"]), ("Pro ($20/month)", "Good value at $20.", "Teams."))
 
     def test_plan_named_without_its_price_counts_as_dropped(self):
         previous = {"pricing": "paid", "pricingDetail": "Pro ($20/month), Max 5x ($100/month), Max 20x ($200/month)"}

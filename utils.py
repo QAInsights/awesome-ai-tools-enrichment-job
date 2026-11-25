@@ -198,11 +198,11 @@ def carry_over(
             data[field] = previous[field]
     problem = pricing_regression(data, previous)
     if problem:
-        for field in ("pricing", "pricingDetail"):
+        for field in ("pricing", "pricingDetail", "verdict"):
             if field in previous:
                 data[field] = previous[field]
         if notes is not None:
-            notes.append(f"kept the published pricing: {problem}")
+            notes.append(f"kept the published pricing and verdict: {problem}")
     if LOCAL_HINT.search(_local_corpus(previous)) and not LOCAL_HINT.search(_local_corpus(data)):
         for field in ("description", "tags"):
             if field in previous:
